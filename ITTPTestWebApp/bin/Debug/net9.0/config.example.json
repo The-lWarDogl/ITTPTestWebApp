@@ -1,0 +1,7 @@
+{
+    "DBConnectionString": "Host=localhost;Username=username;Password=password;Database=database",
+    "ServerConnectionUrl": "http://localhost:8080/",
+    "Jwt_Issuer": "ITTPTestWebApp",
+    "Jwt_Audience": "ITTPTestWebAppClient",
+    "Jwt_SecretKey": "JwtSecretKeySHA256!123456789101112"
+}

@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36109.1 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ITTPTestWebApp", "ITTPTestWebApp\ITTPTestWebApp.csproj", "{3783F7FC-0873-4B8C-902A-8A470922F2BE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3783F7FC-0873-4B8C-902A-8A470922F2BE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3783F7FC-0873-4B8C-902A-8A470922F2BE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3783F7FC-0873-4B8C-902A-8A470922F2BE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3783F7FC-0873-4B8C-902A-8A470922F2BE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {1DC2E5E6-C1DC-42FB-8E53-85E96013CCB1}
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,10 @@
+# Игнорируем точечные файлы config.json в Debug/Release
+/ITTPTestWebApp/bin/Debug/net9.0/config.json
+/ITTPTestWebApp/bin/Release/net9.0/config.json
+
+# Игнорируем папку Logs в Debug/Release
+/ITTPTestWebApp/bin/Debug/net9.0/Logs/
+/ITTPTestWebApp/bin/Release/net9.0/Logs/
+
+# Игнорируем всю папку publish
+/ITTPTestWebApp/bin/publish/

@@ -1,0 +1,23 @@
+﻿using ITTPTestWebApp.Common;
+using ITTPTestWebApp.Services.ServicesTask;
+
+namespace ITTPTestWebApp.Services.Login
+{
+    static class ParametersСheck
+    {
+        private static readonly Dictionary<ServicesTaskType, Dictionary<string, Type>> _ActionsNecessaryKeysAndValueTypes = new ()
+        {
+            {ServicesTaskType.Login, new Dictionary<string, Type>()
+            {
+                { "login", typeof(string) },
+                { "password", typeof(string) },
+            }},
+        };
+
+        public static bool ParametersKeyСheck(Dictionary<string, object> parameters, ServicesTaskType taskType, out string exceptionText) =>
+            ActionsParametersСheck.ParametersKeyСheck(_ActionsNecessaryKeysAndValueTypes, parameters, taskType, out exceptionText);
+
+        public static bool ParameterСheck<T>(Dictionary<string, object> parameters, string key) =>
+            ActionsParametersСheck.ParameterСheck<T>(parameters, key);
+    }
+}

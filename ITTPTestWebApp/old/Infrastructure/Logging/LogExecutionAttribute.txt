@@ -1,0 +1,44 @@
+﻿using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using PostSharp.Aspects;
+using PostSharp.Serialization; 
+
+//INFO требует лицензии PostSharp
+namespace GLogistBot.Logging
+{
+    /// <summary>
+    /// Система атрибутов для логирования входящих данных в метод и исходящих из него, а также указания времени исполнения
+    /// </summary>
+    [PSerializable]
+    sealed class LogExecutionAttribute : OnMethodBoundaryAspect
+    {
+        #region public methods
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public override void OnEntry(MethodExecutionArgs args)
+        {
+            args.MethodExecutionTag = Stopwatch.StartNew();
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public override void OnExit(MethodExecutionArgs args)
+        {
+            if (args.Exception != null) return;
+
+            var stopwatch = (Stopwatch)args.MethodExecutionTag;
+            stopwatch.Stop();
+
+            Logger.Instance.Log(
+                    $"\n" +
+                    string.Join(" | ", args.Arguments.Cast<object>()
+                              .Select((arg, index) => $"arg{index}: {arg}")) + "\n" +
+                    $"return: {args.ReturnValue}\n" +
+                    $"execution time: {stopwatch.ElapsedMilliseconds} ms",
+                    tag: "execution",
+                    callerName: args.Method.Name,
+                    stackTrace: new StackTrace()
+                );
+        }
+        #endregion
+    }
+
+}

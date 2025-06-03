@@ -1,0 +1,26 @@
+﻿using System.Net;
+
+namespace ITTPTestWebApp.Network
+{
+    class RequestProcessingInfo
+    {
+        public readonly string Method;
+        public readonly string? ContentTypeIn;
+        public readonly string? ContentTypeOut;
+        public readonly Func<string?, Dictionary<string, string>, Dictionary<string, Cookie>, 
+            Task<(HttpStatusCode, string?)>> RequestCheck;
+        public readonly Func<string?, Dictionary<string, string>, Dictionary<string, Cookie>, 
+            Task<(HttpStatusCode, string?, Dictionary<string, string>?, Dictionary<string, Cookie>?)>> RequestProcessing;
+    
+        public RequestProcessingInfo
+        (
+            string method, string? contentTypeIn, string? contentTypeOut,  
+            Func<string?, Dictionary<string, string>, Dictionary<string, Cookie>, 
+                Task<(HttpStatusCode, string?)>> requestCheck, 
+            Func<string?, Dictionary<string, string>, Dictionary<string, Cookie>, 
+                Task<(HttpStatusCode, string?, Dictionary<string, string>?, Dictionary<string, Cookie>?)>> requestProcessing
+        )
+        { Method = method.ToUpperInvariant(); ContentTypeIn = contentTypeIn; ContentTypeOut = contentTypeOut;
+          RequestCheck = requestCheck; RequestProcessing = requestProcessing; }
+    }
+}

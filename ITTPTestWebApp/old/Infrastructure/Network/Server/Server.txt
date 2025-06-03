@@ -1,0 +1,285 @@
+﻿using System.Net;
+using System.Text;
+using System.Text.RegularExpressions;
+using ITTPTestWebApp.Logging;
+
+namespace ITTPTestWebApp.Network
+{
+    static class Server
+    {
+        #region public methods
+        public static async Task StartListening
+        (
+            string prefix,
+            ManualResetEvent stopEvent,
+            Dictionary<string, RequestProcessingInfo> resources,
+            List<string>? corsAllowedHeaders = null,
+            List<string>? permittedAddresses = null
+        )
+        {
+            try
+            {
+                using HttpListener httpListener = new HttpListener();
+                httpListener.Prefixes.Add(prefix);
+                httpListener.Start();
+
+                while (!stopEvent.WaitOne(TimeSpan.Zero))
+                {
+                    HttpListenerContext context = await httpListener.GetContextAsync();
+                    _ = Task.Run(async () =>
+                    {
+                        try { await ProcessRequestAsync(Regex.Match(prefix, @"https?://[^/]+(/.*)").Groups[1].Value, context, corsAllowedHeaders, resources, permittedAddresses); }
+                        catch (Exception ex) { Logger.Instance.Log(ex); }
+                    });
+                }
+
+                httpListener.Stop();
+            }
+            catch (Exception ex) { Logger.Instance.Log(ex); }
+        }
+
+        public static async Task StartListeningFromFolder
+        (
+            string prefix,
+            ManualResetEvent stopEvent,
+            string folderPath,
+            List<string>? permittedAddresses = null
+        )
+        {
+            Dictionary<string, RequestProcessingInfo> resources = new();
+            foreach (string absoluteFilePath in Directory.EnumerateFiles(folderPath, "*", SearchOption.AllDirectories))
+            {
+                string filePath = Path.GetRelativePath(folderPath, absoluteFilePath);
+                resources.Add
+                (
+                    filePath.Replace('\\', '/'),
+                    new RequestProcessingInfo
+                    (
+                        method: "GET",
+                        contentTypeIn: null, contentTypeOut: GetContentTypeFromExtension(filePath),
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
+                        requestCheck: async (_, _, _) => (HttpStatusCode.OK, string.Empty),
+                        requestProcessing: async (_, _, _) =>
+                        {
+                            try { return (HttpStatusCode.OK, File.ReadAllText(Path.Combine(folderPath, filePath), Encoding.UTF8), null, null); }
+                            catch { return (HttpStatusCode.InternalServerError, null, null, null); }
+                        }
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
+                    )
+                 );
+            }
+            await StartListening(prefix, stopEvent, resources, null, permittedAddresses);
+        }
+
+        public static async Task StartListeningRedirect
+        (
+            string prefix,
+            ManualResetEvent stopEvent,
+            List<(string Method, string From, string To)> redirectInfos,
+            List<string>? corsAllowedHeaders = null,
+            List<string>? permittedAddresses = null
+        )
+        {
+            Dictionary<string, RequestProcessingInfo> resources = new();
+            foreach (var redirectInfo in redirectInfos)
+            {
+                resources.Add
+                (
+                    redirectInfo.From,
+                    new RequestProcessingInfo
+                    (
+                        method: redirectInfo.Method,
+                        contentTypeIn: null, contentTypeOut: null,
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
+                        requestCheck: async (_, _, _) => (HttpStatusCode.OK, string.Empty),
+                        requestProcessing: async (_, _, _) => 
+                        (
+                            HttpStatusCode.TemporaryRedirect, 
+                            null, 
+                            new ()
+                            {
+                                { "Location", redirectInfo.To }
+                            }, 
+                            null
+                        )
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
+                    )
+                 );
+            }
+            await StartListening(prefix, stopEvent, resources, corsAllowedHeaders, permittedAddresses);
+        }
+        #endregion
+
+        #region private methods
+        private static string GetContentTypeFromExtension(string filePath) => 
+            Path.GetExtension(filePath).ToLowerInvariant() switch
+            {
+                ".html" => "text/html",
+                ".css" => "text/css",
+                ".js" => "application/javascript",
+                ".json" => "application/json",
+                ".png" => "image/png",
+                ".jpg" => "image/jpeg",
+                ".jpeg" => "image/jpeg",
+                ".gif" => "image/gif",
+                _ => "application/octet-stream",
+            };
+
+        private static async Task ProcessRequestAsync
+        (
+            string basePath,
+            HttpListenerContext context,
+            List<string>? corsAllowedHeaders,
+            Dictionary<string, RequestProcessingInfo> resources,
+            List<string>? permittedAddresses
+        )
+        {
+            HttpListenerRequest request = context.Request;
+            HttpListenerResponse response = context.Response;
+            try
+            {
+                response.AddCorsHeaders(request, resources.Values.Select(r => r.Method).Distinct().ToList(), corsAllowedHeaders);
+                if (request.HttpMethod == "OPTIONS")
+                { response.StatusCode = (int)HttpStatusCode.NoContent; return; }
+
+                if (!CheckRemoteAddress(request, permittedAddresses))
+                { response.StatusCode = (int)HttpStatusCode.Forbidden; return; }
+
+                string resourceName = GetResourceName(basePath, request.RawUrl ?? "index.html");
+                if (!resources.ContainsKey(resourceName) && string.IsNullOrEmpty(Path.GetExtension(resourceName)))
+                { resourceName += ".html"; }
+                if (!resources.ContainsKey(resourceName))
+                { response.StatusCode = (int)HttpStatusCode.BadRequest; return; }
+
+                var requestProcessingInfo = resources[resourceName];
+
+                if (requestProcessingInfo.ContentTypeIn != null &&
+                    (!request.ContentType?.Contains(requestProcessingInfo.ContentTypeIn) ?? true))
+                { response.StatusCode = (int)HttpStatusCode.BadRequest; return; }
+
+                if (!string.Equals(request.HttpMethod, requestProcessingInfo.Method, StringComparison.OrdinalIgnoreCase))
+                { response.StatusCode = (int)HttpStatusCode.MethodNotAllowed; return; }
+
+                (HttpStatusCode statusCode, byte[]? buffer, WebHeaderCollection? headers, CookieCollection? cookies) = await ProcessingAsync(request, requestProcessingInfo);
+
+                response.StatusCode = (int)statusCode;
+                if (headers != null && headers.AllKeys.Any())
+                {
+                    foreach (string key in headers.AllKeys.Except(response.Headers.AllKeys))
+                    { response.Headers.Add(key, headers[key]!); }
+                }
+                if (cookies != null && cookies.Any())
+                { response.Cookies.Add(cookies); }
+                if (requestProcessingInfo.ContentTypeOut != null && buffer != null && buffer.Length != 0)
+                {
+                    response.ContentType = requestProcessingInfo.ContentTypeOut +
+                    (new[] { "text", "application" }.Any(sub => requestProcessingInfo.ContentTypeOut.Contains(sub))
+                    ? "; charset=utf-8" : string.Empty);
+                    response.ContentLength64 = buffer.Length;
+                    await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                }
+                else { response.ContentLength64 = 0; }
+            }
+            catch (Exception ex)
+            {
+                Logger.Instance.Log(ex);
+                response.StatusCode = (int)HttpStatusCode.InternalServerError;
+            }
+            finally { response.Close(); }
+        }
+
+        private static void AddCorsHeaders(this HttpListenerResponse response, HttpListenerRequest request, List<string> allowedMethods, List<string>? allowedHeaders)
+        {
+            response.Headers.Add("Access-Control-Allow-Origin", request.Headers["Origin"] ?? request.Url?.GetLeftPart(UriPartial.Authority) ?? "*");
+            response.Headers.Add("Access-Control-Allow-Methods", string.Join(",", allowedMethods) + ", OPTIONS");
+            response.Headers.Add("Access-Control-Allow-Headers", "Content-Type" +
+                (allowedHeaders != null && allowedHeaders.Any() ? ", " + string.Join(",", allowedHeaders) : string.Empty));
+            response.Headers.Add("Access-Control-Allow-Credentials", "true");
+        }
+
+        private static bool CheckRemoteAddress(HttpListenerRequest request, List<string>? permittedAddresses)
+        {
+            IPAddress? address = IPAddress.TryParse(request.Headers["X-Real-IP"], out var ip) ? ip : request.RemoteEndPoint?.Address;
+            if (address == null) return false;
+            if (permittedAddresses == null) return true;
+
+            if (permittedAddresses.Contains(address.ToString())) return true;
+
+            return permittedAddresses
+                .Where(a => a.Contains('/'))
+                .Select(a => a.Split('/'))
+                .Where(parts => parts.Length == 2 && IPAddress.TryParse(parts[0], out _) && int.TryParse(parts[1], out _))
+                .Select(parts => (IPAddress.Parse(parts[0]), int.Parse(parts[1])))
+                .Any(cidr => IsInCidrRange(address, cidr.Item1, cidr.Item2));
+        }
+
+        private static bool IsInCidrRange(IPAddress ip, IPAddress networkIP, int prefixLength)
+        {
+            byte[] ipBytes = ip.GetAddressBytes(), networkBytes = networkIP.GetAddressBytes();
+            int fullBytes = prefixLength / 8, remainingBits = prefixLength % 8;
+            return ipBytes.Take(fullBytes).SequenceEqual(networkBytes.Take(fullBytes)) &&
+                   (remainingBits == 0 ||
+                    (ipBytes[fullBytes] & (0xFF << (8 - remainingBits))) ==
+                    (networkBytes[fullBytes] & (0xFF << (8 - remainingBits))));
+        }
+
+        private static string GetResourceName(string basePath, string path)
+        {
+            path = path.Split('?')[0];
+            return path.StartsWith(basePath) ? path.Substring(basePath.Length) : string.Empty;
+        }
+
+        private static async 
+        Task<(
+            HttpStatusCode StatusCode, 
+            byte[]? Buffer,
+            WebHeaderCollection?,
+            CookieCollection? Cookies
+        )> 
+        ProcessingAsync
+        (
+            HttpListenerRequest request,
+            RequestProcessingInfo requestProcessingInfo
+        )
+        {
+            Dictionary<string, string> headersIn = request.Headers.AllKeys
+                .OfType<string>().Distinct()
+                .ToDictionary(k => k, k => request.Headers[k] ?? string.Empty);
+            Dictionary<string, Cookie> cookiesIn = request.Cookies
+                .OfType<Cookie>().GroupBy(cookie => cookie.Name)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            string body = string.Empty;
+            switch (requestProcessingInfo.Method)
+            {
+                case "POST":
+                case "PUT":
+                    using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
+                    { body = await reader.ReadToEndAsync(); }
+                    break;
+                case "GET":
+                case "DELETE":
+                    if (!string.IsNullOrEmpty(request.Url?.Query))
+                    { body = request.Url.Query.Length > 1 ? request.Url.Query.Substring(1) : string.Empty; }
+                    break;
+                default:
+                    return (HttpStatusCode.BadRequest, null, null, null);
+            }
+
+            (HttpStatusCode code, string? res) = await requestProcessingInfo.RequestCheck(body, headersIn, cookiesIn);
+            if (code != HttpStatusCode.OK && code != HttpStatusCode.NoContent) 
+            { return (code, res != null ? Encoding.UTF8.GetBytes(res) : null, null, null); }
+
+            (code, res, Dictionary<string, string>? headersOut, Dictionary<string, Cookie>? cookiesOut) = await requestProcessingInfo.RequestProcessing(body, headersIn, cookiesIn);
+            
+            return 
+            (
+                code, 
+                res != null ? Encoding.UTF8.GetBytes(res) : null,
+                headersOut?.Aggregate(new WebHeaderCollection(), (col, kvp) => { col.Add(kvp.Key, kvp.Value); return col; }),
+                cookiesOut?.Values.Aggregate(new CookieCollection(), (col, cookie) => { col.Add(cookie); return col; })
+            );
+        }
+        #endregion
+    }
+}
