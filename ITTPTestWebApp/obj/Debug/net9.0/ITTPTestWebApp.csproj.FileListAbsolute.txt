@@ -30,3 +30,4 @@ D:\Projects\Cproject\ITTPTestWebApp\ITTPTestWebApp\bin\Debug\net9.0\Microsoft.Id
 D:\Projects\Cproject\ITTPTestWebApp\ITTPTestWebApp\bin\Debug\net9.0\Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
 D:\Projects\Cproject\ITTPTestWebApp\ITTPTestWebApp\bin\Debug\net9.0\Microsoft.IdentityModel.Tokens.dll
 D:\Projects\Cproject\ITTPTestWebApp\ITTPTestWebApp\bin\Debug\net9.0\System.IdentityModel.Tokens.Jwt.dll
+D:\Projects\Cproject\ITTPTestWebApp\ITTPTestWebApp\obj\Debug\net9.0\ITTPTestWebApp.sourcelink.json

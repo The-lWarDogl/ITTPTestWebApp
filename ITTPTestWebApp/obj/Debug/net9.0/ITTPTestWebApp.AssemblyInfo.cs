@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ITTPTestWebApp")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5e3998fdef39558c90895113138958ab8c8ef7d6")]
 [assembly: System.Reflection.AssemblyProductAttribute("ITTPTestWebApp")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ITTPTestWebApp")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

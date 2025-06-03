@@ -27,7 +27,7 @@ namespace ITTPTestWebApp.Services.UsersController
         [SwaggerResponse(403, "Forbidden: access denied.", typeof(ResponseErrorBody))]
         [SwaggerResponse(500, "Internal server error.", typeof(ResponseErrorBody))]
         [Authorize]
-        public async Task<IActionResult> ReadAll([FromQuery] bool? activeOnly = null, [FromQuery] TimeSpan? olderThan = null) =>
+        public async Task<IActionResult> ReadAll([FromQuery] bool? activeOnly = null, [FromQuery] int? minAgeYears = null, [FromQuery] int? maxAgeYears = null) =>
             await RequestControllerExt.ExecuteAsync
                 (
                     controller: this,
@@ -82,10 +82,15 @@ namespace ITTPTestWebApp.Services.UsersController
             {
                 var request = JsonConvert.DeserializeObject<Dictionary<string, string>>(stringQueryParams)!;
 
-                var users = UsersControllerService.Instance.GetAllUsers().Select(u => (ResponseBodyUser) u).ToList();
+                var users = UsersControllerService.Instance.GetAllUsers()
+                    .OrderBy(u => u.CreatedOn)
+                    .Select(u => (ResponseBodyUser) u).ToList();
                 if (request.ContainsKey("activeOnly") && bool.Parse(request["activeOnly"])) { users = users.Where(u => u.isActive).ToList(); }
                 DateTime utcNow = DateTime.UtcNow;
-                if (request.ContainsKey("olderThan")) { users = users.Where(u => u.birthday != null && (utcNow - u.birthday) > TimeSpan.Parse(request["olderThan"])).ToList(); }
+                if (request.ContainsKey("minAgeYears"))
+                { users = users.Where(u => u.birthday.HasValue && u.birthday.Value.Date <= utcNow.AddYears(-int.Parse(request["minAgeYears"]))).ToList(); }
+                if (request.ContainsKey("maxAgeYears"))
+                { users = users.Where(u => u.birthday.HasValue && u.birthday.Value.Date >= utcNow.AddYears(-int.Parse(request["maxAgeYears"]))).ToList(); }
 
                 return 
                 (
