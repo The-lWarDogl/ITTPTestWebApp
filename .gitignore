@@ -8,3 +8,6 @@
 
 # Игнорируем всю папку publish
 /ITTPTestWebApp/bin/publish/
+
+# Игнорируем ссылку на github
+/github.url
